@@ -11,6 +11,7 @@
 <script>
   try { const t = localStorage.getItem('pipeline-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
 </script>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js" } }</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Fira+Sans+Extra+Condensed:wght@700;800;900&family=Fira+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
@@ -139,6 +140,26 @@ button{cursor:pointer;background:none;border:0;padding:0}
 .more{font:500 11px var(--f-code);color:var(--mute);padding:2px 8px}
 .empty{grid-column:1/-1;padding:48px var(--gut);font:900 clamp(28px,4vw,48px)/1 var(--f-num);text-transform:uppercase}
 .empty button{margin-top:16px}
+
+/* ─── The Monolith (three.js stage, scroll-driven, CSS sticky instead of JS pin) ─── */
+.mono{position:relative;height:430vh;border-top:0}
+.mono[hidden]{display:none}
+.stage{position:sticky;top:48px;height:calc(100vh - 48px - 68px - var(--safe-b));overflow:hidden;border-bottom:var(--b) solid var(--line)}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:pan-y;cursor:crosshair}
+.chap{position:absolute;left:var(--gut);bottom:var(--gut);width:min(440px,calc(100% - 2*var(--gut)));background:var(--panel);border:var(--B) solid var(--line);padding:12px 16px 14px;box-shadow:10px 10px 0 var(--fg)}
+.chap-top{display:flex;justify-content:space-between;align-items:center}
+.chap-bar{display:flex;gap:4px}
+.chap-bar i{width:26px;height:10px;border:var(--b) solid var(--line)}
+.chap-bar i.on{background:var(--fg)}
+.chap h3{margin:8px 0 6px;font:900 clamp(38px,5vw,64px)/.85 var(--f-num);text-transform:uppercase}
+.chap p{margin:0;font:500 15px/1.4 var(--f-ui)}
+.chap p b{font-weight:800}
+.mono-legend{position:absolute;right:var(--gut);top:14px;display:flex;flex-wrap:wrap;gap:6px 14px;justify-content:flex-end;background:var(--panel);border:var(--b) solid var(--line);padding:8px 10px;max-width:60%}
+.mono-legend span{display:inline-flex;align-items:center;gap:6px}
+.sw.blue{background:var(--blue)}
+.hint{position:absolute;right:var(--gut);bottom:var(--gut);background:var(--fg);color:var(--bg);padding:8px 10px}
+.is-gl #cal{display:none}
+@media (max-width:900px){ .chap{box-shadow:6px 6px 0 var(--fg)} .hint{display:none} }
 
 /* ─── Flow ─── */
 .flow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -323,10 +344,21 @@ tbody tr.urgent td:first-child{box-shadow:inset 8px 0 0 var(--red)}
 
   <section id="wall" class="sec" aria-labelledby="h-wall">
     <div class="sec-h">
-      <h2 id="h-wall">The <i>Wall</i></h2>
-      <p>Six weeks of deadlines. One tag is one bid, filed on the day it is due. Tap a tag to open it.</p>
+      <h2 id="h-wall">The <i>Monolith</i></h2>
+      <p>Six weeks of deadlines cast in concrete. Every live bid is a slab pushed out of the day it is due; the further it juts, the bigger the mandate. Scroll to move the camera. Tap a slab to open it.</p>
       <div class="legend" aria-hidden="true">
         <span><i class="sw red"></i>Due inside 72h</span><span><i class="sw yellow"></i>Finals presentation</span><span><i class="sw plain"></i>Live bid</span><span><i class="sw today"></i>Today</span>
+      </div>
+    </div>
+    <div class="mono" id="mono" hidden>
+      <div class="stage" id="stage">
+        <canvas id="gl" role="img" aria-label="A concrete wall shaped like a six-week calendar. Each live bid is a coloured slab protruding from its due day; depth is mandate size. The Ledger section lists the same bids as a table."></canvas>
+        <div class="chap" id="chap" aria-live="polite">
+          <div class="chap-top"><span class="code" id="chapN">01 / 04</span><span class="chap-bar" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i></span></div>
+          <h3 id="chapT">The Monolith</h3><p id="chapP"></p>
+        </div>
+        <div class="mono-legend code" aria-hidden="true"><span><i class="sw red"></i>≤72H</span><span><i class="sw yellow"></i>FINALS</span><span><i class="sw blue"></i>LIVE</span><span>DEPTH = AUM</span></div>
+        <div class="hint code" id="hint" aria-hidden="true">↓ SCROLL · TAP A SLAB</div>
       </div>
     </div>
     <div class="cal" id="cal" role="grid" aria-label="Six-week deadline calendar"></div>
@@ -366,6 +398,7 @@ tbody tr.urgent td:first-child{box-shadow:inset 8px 0 0 var(--red)}
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/Flip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/ScrambleTextPlugin.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/ScrollTrigger.min.js"></script>
 <script>
 (() => {
 'use strict';
@@ -477,7 +510,7 @@ tick(); setInterval(tick, 20000);
 const isDark = () => document.documentElement.dataset.theme ? document.documentElement.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
 function syncTheme(){ $('#themeBtn').setAttribute('aria-pressed', String(isDark())); $('#themeL').textContent = isDark() ? 'Light' : 'Dark'; $('#themeBtn').setAttribute('aria-label', isDark() ? 'Switch to light mode' : 'Switch to dark mode'); }
 syncTheme();
-$('#themeBtn').addEventListener('click', () => { const t = isDark() ? 'light' : 'dark'; document.documentElement.dataset.theme = t; store.set('pipeline-theme', t); syncTheme(); renderWL(); });
+$('#themeBtn').addEventListener('click', () => { const t = isDark() ? 'light' : 'dark'; document.documentElement.dataset.theme = t; store.set('pipeline-theme', t); syncTheme(); renderWL(); document.dispatchEvent(new CustomEvent('pipe:theme')); });
 
 /* ═══════════════════════ Filters ═══════════════════════ */
 $('#typeSeg').innerHTML = ['All','RFP','RFI','DDQ'].map(t => `<button data-t="${t}" aria-pressed="${t === 'All'}">${t.toUpperCase()}</button>`).join('');
@@ -737,7 +770,8 @@ document.addEventListener('keydown', e => {
 let firstRun = true;
 function update(){
   const k = computeKPIs();
-  renderKPIs(k); renderWall(!firstRun); renderFlow(k); renderLedger(k);
+  renderKPIs(k); renderFlow(k); renderLedger(k);
+  if (window.PIPE_GL) document.dispatchEvent(new CustomEvent('pipe:update')); else renderWall(!firstRun);
   const chip = $('#stageChip'); chip.classList.toggle('on', !!state.stage); $('#stageL').textContent = `STAGE: ${state.stage ? CODE[state.stage] : ''}`;
 }
 let toastT;
@@ -757,6 +791,7 @@ function intro(){
     .from('.dock a', { yPercent: 100, duration: .4, stagger: .05, ease: M.in, clearProps: 'all' }, .3);
 }
 
+window.PIPE = { items, byId, matches, isLive, isUrgent, within7, openSheet, fmtAUM, short, first, CODE, MON, DOW, start, DAYS, addDays, dayDiff, today, NOW, state, reduced, esc, fmtDate, p2, isDark, computeKPIs, M };
 update();
 firstRun = false;
 intro();
@@ -764,6 +799,241 @@ intro();
 const m = location.hash.match(/bid=([A-Z]+-\d+)/);
 if (m && byId.get(m[1])) setTimeout(() => openSheet(m[1]), 700);
 })();
+</script>
+<script type="module">
+/* ═══════════════════════════════════════════════════════════════
+   THE MONOLITH — three.js r186 + GSAP 3.15 ScrollTrigger
+   Follows the ui-ux-pro-max three.js rules: one renderer, DPR ≤ 2,
+   colour management + tone mapping on, touch + mouse, GSAP tweens
+   three.js properties directly, scrub:1 for the scroll camera,
+   ResizeObserver on the stage, no more than one sticky section.
+   ═══════════════════════════════════════════════════════════════ */
+import * as THREE from 'three';
+const P = window.PIPE, G = window.gsap, ST = window.ScrollTrigger;
+const webgl2 = (() => { try { return !!document.createElement('canvas').getContext('webgl2'); } catch (e) { return false; } })();
+if (P && G && ST && webgl2 && innerWidth >= 640 && !P.reduced) boot();
+
+function boot(){
+  G.registerPlugin(ST);
+  const mono = document.getElementById('mono'), stage = document.getElementById('stage'), canvas = document.getElementById('gl');
+  mono.hidden = false; document.documentElement.classList.add('is-gl'); window.PIPE_GL = true;
+
+  /* ─── renderer (one per page) ─── */
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+  let pr = Math.min(devicePixelRatio || 1, 2);
+  renderer.setPixelRatio(pr);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;   // hard, brutal shadows
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(36, 1, .1, 220);
+  const target = new THREE.Vector3();
+
+  /* ─── light: low raking sun for long concrete shadows ─── */
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x3a3a3a, 1.1);
+  const sun = new THREE.DirectionalLight(0xffffff, 3.4);
+  sun.position.set(-16, 17, 17); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 14, bottom: -14, near: 1, far: 90 });
+  sun.shadow.bias = -.0005; sun.shadow.normalBias = .02;
+  scene.add(hemi, sun, sun.target);
+
+  /* ─── geometry of time ─── */
+  const COLS = 7, ROWS = 6, CW = 2, CH = 1.6, W = COLS * CW, H = ROWS * CH, M = .2;
+  const pivot = new THREE.Group(); pivot.position.set(0, -H / 2 - M, -.8); scene.add(pivot);   // hinge at the wall's back-bottom edge
+  const world = new THREE.Group(); world.position.set(0, H / 2 + M, .8); pivot.add(world);
+  const theme = () => P.isDark() ? { bg: 0x000000, conc: '#3b3a37', face: '#46453f', ink: '#F2F1EC', inkDim: 'rgba(242,241,236,.55)', hatch: 'rgba(242,241,236,.14)', ground: 0x1a1a18 }
+                                 : { bg: 0xF2F1EC, conc: '#cfccc3', face: '#dedbd2', ink: '#000000', inkDim: 'rgba(0,0,0,.5)', hatch: 'rgba(0,0,0,.12)', ground: 0xd9d6ce };
+  let T = theme();
+  scene.background = new THREE.Color(T.bg); scene.fog = new THREE.Fog(T.bg, 38, 95);
+
+  /* the wall's face is one canvas: the calendar printed on concrete */
+  const atlas = document.createElement('canvas'); atlas.width = 2048; atlas.height = Math.round(2048 * (H + 2 * M) / (W + 2 * M));
+  const atlasTex = new THREE.CanvasTexture(atlas); atlasTex.colorSpace = THREE.SRGBColorSpace; atlasTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const concrete = new THREE.MeshStandardMaterial({ color: T.conc, roughness: .96, metalness: 0 });
+  const face = new THREE.MeshStandardMaterial({ map: atlasTex, roughness: .92, metalness: 0 });
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(W + 2 * M, H + 2 * M, .8), [concrete, concrete, concrete, concrete, face, concrete]);
+  wall.position.z = -.4; wall.receiveShadow = true; wall.castShadow = true; world.add(wall);
+  const groundMat = new THREE.MeshStandardMaterial({ color: T.ground, roughness: 1 });
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), groundMat);
+  ground.rotation.x = -Math.PI / 2; ground.position.y = -H / 2 - M - .001; ground.receiveShadow = true; scene.add(ground);
+
+  const cellCenter = k => [-W / 2 + (k % COLS + .5) * CW, H / 2 - (Math.floor(k / COLS) + .5) * CH];
+  function drawAtlas(){
+    const c = atlas.getContext('2d'), u = atlas.width / (W + 2 * M), o = M * u;
+    c.fillStyle = T.face; c.fillRect(0, 0, atlas.width, atlas.height);
+    const rnd = (a => () => (a = (a * 16807) % 2147483647) / 2147483647)(7);
+    for (let i = 0; i < 14000; i++){ c.fillStyle = `rgba(${P.isDark() ? '255,255,255' : '0,0,0'},${rnd() * .07})`; c.fillRect(rnd() * atlas.width, rnd() * atlas.height, 1 + rnd() * 3, 1 + rnd() * 3); }
+    for (let k = 0; k < P.DAYS; k++){
+      const d = P.addDays(P.start, k), dd = P.dayDiff(d, P.today), x = o + (k % COLS) * CW * u, y = o + Math.floor(k / COLS) * CH * u, w = CW * u, h = CH * u;
+      if (dd < 0){ c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip(); c.strokeStyle = T.hatch; c.lineWidth = 4; for (let t = -h; t < w; t += 22){ c.beginPath(); c.moveTo(x + t, y + h); c.lineTo(x + t + h, y); c.stroke(); } c.restore(); }
+      if (dd === 0){ c.fillStyle = T.ink; c.fillRect(x, y, w, h * .36); }
+      c.fillStyle = dd === 0 ? (P.isDark() ? '#000' : '#F2F1EC') : dd < 0 ? T.inkDim : T.ink;
+      c.font = `800 ${Math.round(h * .3)}px "Fira Sans Extra Condensed","Arial Narrow",sans-serif`; c.textBaseline = 'top';
+      c.fillText(P.p2(d.getDate()), x + 16, y + 10);
+      c.font = `700 ${Math.round(h * .085)}px "Fira Code",ui-monospace,monospace`; c.textAlign = 'right';
+      const tag = dd === 0 ? 'TODAY' : (d.getDate() === 1 || k === 0) ? P.MON[d.getMonth()].toUpperCase() : k < 7 ? P.DOW[d.getDay()].toUpperCase() : '';
+      c.fillText(tag, x + w - 16, y + 18); c.textAlign = 'left';
+    }
+    c.strokeStyle = T.ink; c.lineWidth = 7;
+    for (let i = 0; i <= COLS; i++){ c.beginPath(); c.moveTo(o + i * CW * u, o); c.lineTo(o + i * CW * u, atlas.height - o); c.stroke(); }
+    for (let j = 0; j <= ROWS; j++){ c.beginPath(); c.moveTo(o, o + j * CH * u); c.lineTo(atlas.width - o, o + j * CH * u); c.stroke(); }
+    atlasTex.needsUpdate = true;
+  }
+
+  /* ─── slabs: one per live bid in the six-week window ─── */
+  const COL = { red: '#FF3B1F', yellow: '#FFE500', blue: '#0026FF' };
+  const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0, .5);
+  const sideMat = {}; for (const k in COL) sideMat[k] = new THREE.MeshStandardMaterial({ color: COL[k], roughness: .7 });
+  const slabs = [];
+  const live = P.items.filter(i => P.isLive(i)).map(i => ({ i, k: P.dayDiff(i.due, P.start) })).filter(x => x.k >= 0 && x.k < P.DAYS);
+  const byDay = new Map(); live.forEach(x => (byDay.get(x.k) || byDay.set(x.k, []).get(x.k)).push(x.i));
+  const depthOf = aum => .35 + Math.sqrt(aum) / 13;
+  const kind = i => P.isUrgent(i) ? 'red' : i.stage === 'Finalist' ? 'yellow' : 'blue';
+  function faceTexture(i, w, h){
+    const cv = document.createElement('canvas'), W0 = 512, H0 = Math.max(128, Math.round(512 * h / w)); cv.width = W0; cv.height = H0;
+    const c = cv.getContext('2d'), k = kind(i), ink = k === 'blue' ? '#fff' : '#000';
+    c.fillStyle = COL[k]; c.fillRect(0, 0, W0, H0);
+    c.fillStyle = ink; c.textBaseline = 'top';
+    let fs = Math.min(H0 * .34, 96); c.font = `800 ${fs}px "Fira Sans Extra Condensed","Arial Narrow",sans-serif`;
+    const name = P.short(i.client).toUpperCase(); while (c.measureText(name).width > W0 - 36 && fs > 20){ fs -= 4; c.font = `800 ${fs}px "Fira Sans Extra Condensed","Arial Narrow",sans-serif`; }
+    c.fillText(name, 18, 14);
+    c.font = `700 ${Math.max(18, Math.round(fs * .42))}px "Fira Code",ui-monospace,monospace`;
+    c.fillText(`${P.fmtAUM(i.aum).toUpperCase()} · ${P.CODE[i.stage]}`, 18, 14 + fs * 1.02);
+    c.strokeStyle = ink; c.lineWidth = 10; c.strokeRect(5, 5, W0 - 10, H0 - 10);
+    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+  }
+  for (const [k, list] of byDay){
+    list.sort((a, b) => b.aum - a.aum);
+    const n = list.length, cols = n <= 2 ? n : n <= 4 ? 2 : 3, rows = Math.ceil(n / cols), gap = .08;
+    const [cx, cy] = cellCenter(k), aw = CW * .88, ah = CH * .56, ay = cy - CH * .16;
+    const sw = (aw - gap * (cols - 1)) / cols, sh = (ah - gap * (rows - 1)) / rows;
+    list.forEach((i, j) => {
+      const c = j % cols, r = Math.floor(j / cols);
+      const x = cx - aw / 2 + sw / 2 + c * (sw + gap), y = ay + ah / 2 - sh / 2 - r * (sh + gap);
+      const fm = new THREE.MeshStandardMaterial({ map: faceTexture(i, sw, sh), roughness: .65 });
+      const m = new THREE.Mesh(box, [sideMat[kind(i)], sideMat[kind(i)], sideMat[kind(i)], sideMat[kind(i)], fm, sideMat[kind(i)]]);
+      m.position.set(x, y, 0); m.scale.set(sw, sh, .001); m.castShadow = true; m.receiveShadow = true;
+      m.userData = { id: i.id, it: i, depth: depthOf(i.aum), sw, sh, face: fm };
+      world.add(m); slabs.push(m);
+    });
+  }
+
+  /* ─── camera keyframes: four chapters ─── */
+  const fit = () => { const a = stage.clientWidth / Math.max(1, stage.clientHeight); return a < 1.25 ? 1.25 / a : 1; };
+  const KF = [
+    { p: [3, 1.2, 19.5], t: [0, .1, 0] },       // 01 The Monolith — frontal
+    { p: [-13, 6.5, 9.5], t: [-.5, 3.3, 0] }, // 02 This week — raking along the top row
+    { p: [12, 1.5, 11], t: [-1.5, -.5, 0] },  // 03 Six weeks — diagonal down the wall
+    { p: [7, 11.5, 13.5], t: [0, -5.2, -4] }     // 04 The skyline — the wall lies down
+  ];
+  const at = (kf, f) => { const t = new THREE.Vector3(...kf.t), p = new THREE.Vector3(...kf.p); return { p: t.clone().add(p.sub(t).multiplyScalar(f)), t }; };
+  function place(n){ const k = at(KF[n], fit()); camera.position.copy(k.p); target.copy(k.t); }
+  place(0);
+
+  /* chapter copy is computed from the live data every time the filters change */
+  const $ = s => document.querySelector(s);
+  function copy(){
+    const k = P.computeKPIs(), vis = slabs.filter(s => P.matches(s.userData.it));
+    const wk = vis.filter(s => P.dayDiff(s.userData.it.due, P.today) <= 7), big = vis.slice().sort((a, b) => b.userData.it.aum - a.userData.it.aum)[0];
+    const stake = vis.reduce((a, s) => a + s.userData.it.aum, 0), finals = vis.filter(s => s.userData.it.stage === 'Finalist').length;
+    return [
+      ['The Monolith', `<b>${vis.length}</b> live bids push out of the day they are due. The further a slab juts out, the bigger the mandate.`],
+      ['This week', wk.length ? `<b>${wk.length}</b> due in the next seven days, <b>${k.urgent.length}</b> of them inside 72 hours (red). First: <b>${P.esc(k.urgent[0]?.client || wk[0].userData.it.client)}</b>.` : 'Nothing due this week. The top row is quiet.'],
+      ['Six weeks', `<b>${P.fmtAUM(stake)}</b> at stake across the wall. <b>${finals}</b> yellow slab${finals === 1 ? ' is a finals presentation' : 's are finals presentations'}.`],
+      ['The skyline', big ? `Lay the wall down and the mandates become towers. Tallest: <b>${P.esc(big.userData.it.client)}</b>, ${P.fmtAUM(big.userData.it.aum)}.` : 'No towers for these filters.']
+    ];
+  }
+  let chapIdx = -1, chapters = copy();
+  function setChapter(n, force){
+    if (n === chapIdx && !force) return; chapIdx = n;
+    $('#chapN').textContent = `0${n + 1} / 04`;
+    document.querySelectorAll('.chap-bar i').forEach((el, j) => el.classList.toggle('on', j <= n));
+    const [t, body] = chapters[n];
+    $('#chapP').innerHTML = body;
+    if (window.ScrambleTextPlugin) G.to('#chapT', { duration: .45, scrambleText: { text: t, chars: '█▓▒░', speed: 1 }, overwrite: true }); else $('#chapT').textContent = t;
+  }
+  setChapter(0, true);
+
+  /* ─── scroll choreography (scrub:1, per the skill) ─── */
+  const tl = G.timeline({ defaults: { ease: 'none' }, scrollTrigger: { trigger: mono, start: 'top top+=48', end: 'bottom bottom', scrub: 1, invalidateOnRefresh: true,
+    onUpdate: self => setChapter(Math.min(3, Math.floor(self.progress * 4 + .12))) } });
+  [1, 2, 3].forEach(n => {
+    tl.to(camera.position, { x: () => at(KF[n], fit()).p.x, y: () => at(KF[n], fit()).p.y, z: () => at(KF[n], fit()).p.z, duration: 1, ease: 'power2.inOut' }, n - 1)
+      .to(target, { x: () => KF[n].t[0], y: () => KF[n].t[1], z: () => KF[n].t[2], duration: 1, ease: 'power2.inOut' }, n - 1);
+  });
+  tl.to(pivot.rotation, { x: -Math.PI / 2, duration: .85, ease: 'power3.in' }, 2.05)          // the wall falls
+    .to(sun.position, { x: -10, y: 22, z: 6, duration: 1 }, 2);
+  tl.to({}, { duration: .35 });                                                              // hold the skyline
+
+  /* ─── entrance: the wall pushes its deadlines out, mechanically (steps) ─── */
+  let entered = false;
+  function extrude(){
+    if (entered) return; entered = true;
+    const order = slabs.slice().sort((a, b) => a.userData.it.due - b.userData.it.due);
+    order.forEach((m, j) => G.to(m.scale, { z: P.matches(m.userData.it) ? m.userData.depth : .02, duration: .7, ease: 'steps(7)', delay: j * .03 }));
+  }
+  ST.create({ trigger: mono, start: 'top 75%', once: true, onEnter: extrude });
+
+  /* ─── filters: non-matching slabs retract into the concrete ─── */
+  document.addEventListener('pipe:update', () => {
+    chapters = copy(); setChapter(Math.max(0, chapIdx), true);
+    if (!entered) return;
+    slabs.forEach((m, j) => G.to(m.scale, { z: P.matches(m.userData.it) ? m.userData.depth : .02, duration: .55, ease: 'steps(6)', delay: (j % 12) * .012, overwrite: true }));
+  });
+  document.addEventListener('pipe:theme', () => {
+    T = theme(); scene.background.set(T.bg); scene.fog.color.set(T.bg); concrete.color.set(T.conc); groundMat.color.set(T.ground); drawAtlas();
+  });
+
+  /* ─── touch + mouse: raycast slabs ─── */
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  let hovered = null, down = null;
+  function hit(e){
+    const r = canvas.getBoundingClientRect(); ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    const h = ray.intersectObjects(slabs, false).find(x => x.object.scale.z > .1);
+    return h ? h.object : null;
+  }
+  const push = (m, z) => G.to(m.position, { z, duration: .5, ease: 'elastic.out(1,0.4)', overwrite: true });
+  canvas.addEventListener('pointermove', e => {
+    if (e.pointerType !== 'mouse') return;
+    const m = hit(e);
+    if (m !== hovered){ if (hovered) push(hovered, 0); hovered = m; if (m) push(m, .45); canvas.style.cursor = m ? 'pointer' : ''; }
+  });
+  canvas.addEventListener('pointerleave', () => { if (hovered) push(hovered, 0); hovered = null; });
+  canvas.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY }; });
+  canvas.addEventListener('pointerup', e => {
+    if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) return;
+    const m = hit(e); if (!m) return;
+    G.fromTo(m.position, { z: .9 }, { z: hovered === m ? .45 : 0, duration: .8, ease: 'elastic.out(1,0.4)' });
+    // the sheet grows out of the slab's on-screen footprint
+    const b = new THREE.Box3().setFromObject(m), pts = [];
+    for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) pts.push(new THREE.Vector3(x, y, z).project(camera));
+    const r = canvas.getBoundingClientRect(), xs = pts.map(p => r.left + (p.x * .5 + .5) * r.width), ys = pts.map(p => r.top + (-p.y * .5 + .5) * r.height);
+    const rect = { left: Math.min(...xs), top: Math.min(...ys), width: Math.max(8, Math.max(...xs) - Math.min(...xs)), height: Math.max(8, Math.max(...ys) - Math.min(...ys)) };
+    P.openSheet(m.userData.id, { isConnected: true, getBoundingClientRect: () => rect, focus(){} });
+  });
+
+  /* ─── size & render only while visible ─── */
+  function resize(){ const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix(); }
+  new ResizeObserver(() => { resize(); ST.refresh(); }).observe(stage);
+  resize();
+  let visible = false, frames = 0, acc = 0, last = performance.now();
+  new IntersectionObserver(es => { visible = es[0].isIntersecting; }, { rootMargin: '100px' }).observe(stage);
+  (function loop(now){
+    requestAnimationFrame(loop);
+    const dt = now - last; last = now;
+    if (!visible || document.hidden) return;
+    camera.lookAt(target);
+    renderer.render(scene, camera);
+    frames++; acc += dt;
+    if (frames === 60){ if (acc / 60 > 24 && pr > 1){ pr = Math.max(1, pr - .5); renderer.setPixelRatio(pr); resize(); } frames = 0; acc = 0; }
+  })(last);
+
+  const draw = () => { drawAtlas(); slabs.forEach(m => { const t = m.userData.face.map; m.userData.face.map = faceTexture(m.userData.it, m.userData.sw, m.userData.sh); t.dispose(); m.userData.face.needsUpdate = true; }); };
+  drawAtlas();
+  (document.fonts ? Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 2500))]) : Promise.resolve()).then(draw);
+}
 </script>
 </body>
 </html>
