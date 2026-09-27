@@ -131,6 +131,8 @@ button{cursor:pointer;background:none;border:0;padding:0}
 .track-tick.now{height:14px;margin-top:-7px;background:var(--tx)}
 .track-tick.now span{color:var(--tx);top:13px}
 .thumb{position:absolute;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:#000;border:2px solid #ffd6a8;box-shadow:0 0 0 4px rgba(255,140,60,.25),0 0 18px rgba(255,140,60,.8);transition:box-shadow .2s}
+.thumb::before{content:"";position:absolute;inset:-13px;border-radius:50%}
+.thumb{touch-action:none;cursor:grab}
 .track:focus-visible .thumb,.track.drag .thumb{box-shadow:0 0 0 8px rgba(255,140,60,.3),0 0 26px rgba(255,140,60,.95)}
 .readout{min-width:140px;text-align:right;line-height:1.15}
 .readout b{display:block;font:400 22px/1 var(--f-display)}
@@ -306,10 +308,10 @@ button{cursor:pointer;background:none;border:0;padding:0}
   </header>
 
   <section class="kpis" aria-label="Key figures" aria-live="polite">
-    <div class="k" id="k-flight"><span class="mono">In flight</span><b>—</b><p></p></div>
-    <div class="k" id="k-stake"><span class="mono">AUM at stake</span><b>—</b><p></p></div>
-    <div class="k" id="k-rate"><span class="mono">Win rate · 12 mo</span><b>—</b><p></p></div>
-    <div class="k" id="k-due"><span class="mono">Due ≤ 7 days</span><b>—</b><p></p></div>
+    <div class="k" id="k-flight"><span class="mono" data-scr>In flight</span><b data-flip-id="kpi-flight">—</b><p></p></div>
+    <div class="k" id="k-stake"><span class="mono" data-scr>AUM at stake</span><b data-flip-id="kpi-stake">—</b><p></p></div>
+    <div class="k" id="k-rate"><span class="mono" data-scr>Win rate · 12 mo</span><b data-flip-id="kpi-rate">—</b><p></p></div>
+    <div class="k" id="k-due"><span class="mono" data-scr>Due ≤ 7 days</span><b data-flip-id="kpi-due">—</b><p></p></div>
     <div class="pressure mono"><span>Desk pressure</span><span class="pbar" id="pbar"><i></i><i></i><i></i><i></i><i></i></span><b id="plabel">—</b></div>
   </section>
 
@@ -344,7 +346,14 @@ button{cursor:pointer;background:none;border:0;padding:0}
 
 <section class="classic" id="classic" hidden aria-label="Classic view"></section>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<!-- GSAP 3.15 (April 2026) + plugins, all free since 3.13 -->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/CustomEase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/SplitText.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/ScrambleTextPlugin.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/Flip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/Draggable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/InertiaPlugin.min.js"></script>
 <script type="module">
 /* ═════════════════════════════════════════════════════════════════════
    THE PIPELINE · EVENT HORIZON
@@ -354,6 +363,21 @@ button{cursor:pointer;background:none;border:0;padding:0}
 const $ = (s, r = document) => r.querySelector(s);
 const G = window.gsap || null;
 if (G) G.config({ nullTargetWarn: false });
+/* ─── Motion language: ACCRETION ───
+   Enter = captured into orbit: fast approach, long gravitational settle.
+   Exit  = the fall: slow start, accelerating into the dark.
+   GSAP 3.15's easeReverse lets one tween carry both (in on play, fall on reverse). */
+const P = n => window[n] || null;
+if (G){
+  G.registerPlugin(...['CustomEase','SplitText','ScrambleTextPlugin','Flip','Draggable','InertiaPlugin'].map(P).filter(Boolean));
+  if (P('CustomEase')){
+    CustomEase.create('orbit', 'M0,0 C0.09,0.6 0.15,0.9 0.34,0.985 0.52,1.03 0.74,1.004 1,1');
+    CustomEase.create('fall', 'M0,0 C0.46,0 0.86,0.24 1,1');
+  }
+}
+const EASE_IN = G && P('CustomEase') ? 'orbit' : 'expo.out';
+const EASE_OUT = G && P('CustomEase') ? 'fall' : 'power4.in';
+const SCRAMBLE = 'ABCDEFGHJKLMNOPQRSTUVWXYZ0123456789·';
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const touch = matchMedia('(pointer: coarse)').matches;
 const moving = () => !!G && !reduced;
@@ -486,7 +510,7 @@ function countTo(el, key, target, fmt, dur = 1.1){
   const from = kv[key] ?? 0; kv[key] = target;
   if (!moving()){ el.innerHTML = fmt(target); return; }
   const o = { v: from };
-  G.to(o, { v: target, duration: dur, ease: 'power3.out', overwrite: true, onUpdate: () => el.innerHTML = fmt(o.v) });
+  G.to(o, { v: target, duration: dur, ease: EASE_IN, overwrite: true, onUpdate: () => el.innerHTML = fmt(o.v) });
 }
 const PLABELS = ['Calm','Steady','Busy','Elevated','Intense'];
 function renderHUD(k){
@@ -527,7 +551,14 @@ function applyFilters(){
 }
 let toastT;
 function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2600); }
-$('#legendBtn').addEventListener('click', () => { const l = $('#legend'), on = !l.classList.contains('open'); l.classList.toggle('open', on); $('#legendBtn').setAttribute('aria-expanded', String(on)); E.api?.hud(); });
+$('#legendBtn').addEventListener('click', () => {
+  const l = $('#legend'), on = !l.classList.contains('open');
+  $('#legendBtn').setAttribute('aria-expanded', String(on));
+  if (!moving()){ l.classList.toggle('open', on); E.api?.hud(); return; }
+  if (on){ l.classList.add('open'); G.fromTo(l, { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: .6, ease: EASE_IN }); G.from(l.querySelectorAll('h3, li'), { opacity: 0, x: 12, stagger: .05, duration: .6, ease: EASE_IN, clearProps: 'all' }); }
+  else G.to(l, { opacity: 0, y: -8, duration: .3, ease: EASE_OUT, onComplete: () => { l.classList.remove('open'); G.set(l, { clearProps: 'all' }); E.api?.hud(); } });
+  E.api?.hud();
+});
 
 /* ═══════════════════════ Generative sound (muted by default) ═══════════════════════ */
 const PENTA = [110, 130.81, 146.83, 164.81, 196, 220, 261.63, 293.66, 329.63, 392, 440, 523.25];
@@ -615,10 +646,10 @@ function renderClassic(){
       <input class="c-search" id="cq" type="search" placeholder="Client, strategy, owner…" value="${esc(state.q)}" aria-label="Search">
     </div>
     <div class="c-kpis">
-      <div class="ck"><span class="mono">In flight</span><b>${k.flight}</b><p><strong>${k.newWeek}</strong> received this week · <strong>${k.awaiting}</strong> awaiting decision</p></div>
-      <div class="ck"><span class="mono">AUM at stake</span><b><sup>€</sup>${k.stake.toFixed(1)}<small>bn</small></b><p>${k.biggest ? `Largest ${fmtAUM(k.biggest.aum)} · ${esc(k.biggest.client)}` : '—'}</p></div>
-      <div class="ck"><span class="mono">Win rate · 12 mo</span><b>${k.decidedN ? k.rate + '<small>%</small>' : '—'}</b><p>${k.won} won of ${k.decidedN} decided</p></div>
-      <div class="ck ${k.alert ? 'alert' : ''}"><span class="mono">Due ≤ 7 days</span><b>${k.due}</b><p>${k.alert ? `${k.urgent.length} inside 72 hours · ${esc(k.urgent[0].client)} first` : 'Nothing inside 72 hours'}</p></div>
+      <div class="ck"><span class="mono">In flight</span><b data-flip-id="kpi-flight">${k.flight}</b><p><strong>${k.newWeek}</strong> received this week · <strong>${k.awaiting}</strong> awaiting decision</p></div>
+      <div class="ck"><span class="mono">AUM at stake</span><b data-flip-id="kpi-stake"><sup>€</sup>${k.stake.toFixed(1)}<small>bn</small></b><p>${k.biggest ? `Largest ${fmtAUM(k.biggest.aum)} · ${esc(k.biggest.client)}` : '—'}</p></div>
+      <div class="ck"><span class="mono">Win rate · 12 mo</span><b data-flip-id="kpi-rate">${k.decidedN ? k.rate + '<small>%</small>' : '—'}</b><p>${k.won} won of ${k.decidedN} decided</p></div>
+      <div class="ck ${k.alert ? 'alert' : ''}"><span class="mono">Due ≤ 7 days</span><b data-flip-id="kpi-due">${k.due}</b><p>${k.alert ? `${k.urgent.length} inside 72 hours · ${esc(k.urgent[0].client)} first` : 'Nothing inside 72 hours'}</p></div>
     </div>
     <div class="c-grid3">
       <section><h2 class="c-h"><span class="mono">01</span>Due next</h2>
@@ -666,13 +697,18 @@ classic.addEventListener('input', e => {
 function circleFrom(el){ const b = el.getBoundingClientRect(), x = b.left + b.width / 2, y = b.top + b.height / 2; return { x, y, r: Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y)) }; }
 async function setMode(m, { instant = false } = {}){
   if (m === state.mode && !instant) return;
+  const flip = moving() && !instant && P('Flip');
   if (m === 'classic'){
+    const from = flip ? Flip.getState('.kpis .k b', { props: 'color' }) : null;
     state.mode = 'classic'; store.set('pipeline-mode', 'classic');
-    renderClassic(); classic.hidden = false;
+    renderClassic(); classic.hidden = false; classic.scrollTop = 0;
     if (moving() && !instant){
-      const c = circleFrom($('#classicBtn'));
-      await G.fromTo(classic, { clipPath: `circle(0px at ${c.x}px ${c.y}px)` }, { clipPath: `circle(${c.r}px at ${c.x}px ${c.y}px)`, duration: .8, ease: 'expo.inOut' });
-      classic.style.clipPath = '';
+      const tl = G.timeline();
+      tl.fromTo(classic, { opacity: 0 }, { opacity: 1, duration: .55, ease: 'power2.out' }, 0);
+      if (from) tl.add(Flip.from(from, { targets: classic.querySelectorAll('.ck b'), duration: 1.05, ease: EASE_IN, scale: true, zIndex: 70, props: 'color' }), 0);
+      tl.from(classic.querySelectorAll('.c-head > *, .c-filters, .ck .mono, .ck p, .c-h, .c-list li, .c-grid3 tr, .tw tbody tr:nth-child(-n+14)'),
+        { opacity: 0, y: 16, stagger: .018, duration: .7, ease: EASE_IN, clearProps: 'all' }, .15);
+      await tl;
     }
     E.api?.pause(true);
     $('#toHorizon')?.focus({ preventScroll: true });
@@ -687,9 +723,12 @@ async function setMode(m, { instant = false } = {}){
   E.api.pause(false);
   if (fresh){ const k = computeKPIs(); E.api.filters(k); renderHUD(k); }
   if (moving() && !instant && !classic.hidden){
-    const c = circleFrom($('#classicBtn'));
-    await G.fromTo(classic, { clipPath: `circle(${c.r}px at ${c.x}px ${c.y}px)` }, { clipPath: `circle(0px at ${c.x}px ${c.y}px)`, duration: .8, ease: 'expo.inOut' });
-    classic.style.clipPath = '';
+    const from = flip ? Flip.getState(classic.querySelectorAll('.ck b'), { props: 'color' }) : null;
+    const tl = G.timeline();
+    tl.to(classic, { opacity: 0, duration: .5, ease: EASE_OUT }, 0);
+    tl.add(() => { classic.hidden = true; G.set(classic, { clearProps: 'opacity' }); }, .5);
+    if (from) tl.add(Flip.from(from, { targets: '.kpis .k b', duration: 1.1, ease: EASE_IN, scale: true, props: 'color' }), 0);
+    await tl;
   }
   classic.hidden = true;
   if (fresh) E.api.start();
@@ -1026,16 +1065,32 @@ function buildHorizon(){
     const f = flying = { p: 0, from: { az: cam.az, el: cam.el, dist: cam.dist }, target };
     tw(f, { p: 1, duration: reduced ? 0 : dur, ease: 'expo.inOut', onComplete: () => { if (flying === f) flying = null; } });
   }
+  let cardTween = null;
+  function openCard(){
+    card.hidden = false;
+    if (!moving()) return;
+    if (!cardTween) cardTween = G.fromTo(card, { opacity: 0, x: 26, scale: .985 }, { opacity: 1, x: 0, scale: 1, duration: .7, ease: EASE_IN, easeReverse: EASE_OUT, paused: true,
+      onReverseComplete: () => { if (!sel) card.hidden = true; } });
+    cardTween.timeScale(1).play();
+  }
+  function closeCard(){ if (!moving() || !cardTween){ card.hidden = true; return; } cardTween.timeScale(1.6).reverse(); }
+  function revealCard(){
+    if (!moving()) return;
+    const t = $('#cTitle', card);
+    if (P('SplitText') && t){ const sp = SplitText.create(t, { type: 'lines,words', mask: 'lines' }); G.from(sp.words, { yPercent: 110, duration: .9, stagger: .035, ease: EASE_IN, onComplete: () => sp.revert() }); }
+    G.from(card.querySelectorAll('.c-top, .c-sub, .c-grid > div, .c-prog, .c-note, .c-act'), { opacity: 0, y: 12, stagger: .045, duration: .7, ease: EASE_IN, delay: .08, clearProps: 'all' });
+    const big = card.querySelector('.c-grid b');
+    if (P('ScrambleTextPlugin') && big) G.to(big, { duration: .8, scrambleText: { text: big.textContent, chars: '0123456789hd', speed: .6 } });
+  }
   function select(b){
     if (!b) return;
-    sel = b; follow = b; card.hidden = false; fillCard(b, true);
-    if (moving()) G.fromTo(card, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: .5, ease: 'expo.out' });
+    sel = b; follow = b; fillCard(b, true); openCard(); revealCard();
     Sound.orb(b.daysLeft);
     focus.v = 1;
     const portrait = asp() < 1;
     flyTo(() => ({ az: bodyAz(b) + (portrait ? .0 : .28), el: portrait ? .36 : .3, dist: clamp(b.r * 1.5 + 9, 14, 50) * (portrait ? 1.4 : 1) }), 1.8);
   }
-  function deselect(){ sel = null; follow = null; card.hidden = true; focus.v = 0; hudDirty = true; const d = fitDist(); flyTo(() => ({ az: cam.az, el: .3, dist: d }), 1.4); }
+  function deselect(){ sel = null; follow = null; closeCard(); focus.v = 0; hudDirty = true; const d = fitDist(); flyTo(() => ({ az: cam.az, el: .3, dist: d }), 1.4); }
 
   /* ─── lens ─── */
   function filters(k){
@@ -1154,9 +1209,12 @@ function buildHorizon(){
 
   /* ─── intro: out of the dark, the ring ignites ─── */
   let introTl = null;
+  let wmSplit = null;
   function finishIntro(){
     if (!introTl) return;
     introTl.kill(); introTl = null; U.intro = 1;
+    if (wmSplit){ wmSplit.revert(); wmSplit = null; }
+    document.querySelectorAll('[data-scr]').forEach(el => { if (el.dataset.t) el.textContent = el.dataset.t; });
     G?.set('.kpis .k, .kpis .pressure, .top > *, #dock', { clearProps: 'opacity,transform' }); $('#skip').style.opacity = 0;
   }
   function skipIntro(){ if (introTl){ introTl.timeScale(8); $('#skip').style.opacity = 0; } }
@@ -1170,11 +1228,21 @@ function buildHorizon(){
     introTl.to(f, { p: 1, duration: 3.2, ease: 'expo.inOut' }, 0)
       .to(U, { intro: 1, duration: 2.2, ease: 'power2.inOut' }, .2)
       .to(U, { flash: 0, duration: 2.4, ease: 'power2.out' }, .3)
-      .fromTo('.kpis .k, .kpis .pressure', { opacity: 0, x: -14 }, { opacity: 1, x: 0, stagger: .08, duration: .8, ease: 'expo.out' }, .1)
-      .fromTo('.top > *', { opacity: 0, y: -10 }, { opacity: 1, y: 0, stagger: .1, duration: .8, ease: 'expo.out' }, .2)
-      .fromTo('#dock', { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 1, ease: 'expo.out' }, 1.3)
+      .fromTo('.kpis .k, .kpis .pressure', { opacity: 0, x: -14 }, { opacity: 1, x: 0, stagger: .08, duration: 1, ease: EASE_IN }, .1)
+      .fromTo('.top .actions > *', { opacity: 0, y: -10 }, { opacity: 1, y: 0, stagger: .08, duration: .9, ease: EASE_IN }, .5)
+      .fromTo('.brand .mono', { opacity: 0 }, { opacity: 1, duration: .8 }, .9)
+      .fromTo('#dock', { opacity: 0, y: 30, scale: .97 }, { opacity: 1, y: 0, scale: 1, duration: 1.1, ease: EASE_IN }, 1.3)
       .fromTo('#skip', { opacity: 0 }, { opacity: 1, duration: .5 }, .4)
       .to('#skip', { opacity: 0, duration: .5 }, 2.5);
+    if (P('SplitText')){
+      wmSplit = SplitText.create('.wm', { type: 'chars', mask: 'chars' });
+      introTl.from(wmSplit.chars, { yPercent: 115, rotate: 16, opacity: 0, duration: 1.3, stagger: { each: .04, from: 'center' }, ease: EASE_IN }, .15)
+        .add(() => { wmSplit?.revert(); wmSplit = null; }, 1.9);
+    }
+    if (P('ScrambleTextPlugin')) document.querySelectorAll('[data-scr]').forEach((el, i) => {
+      const t = el.dataset.t = el.textContent; el.textContent = '';
+      introTl.to(el, { duration: 1.1, scrambleText: { text: t, chars: SCRAMBLE, revealDelay: .35, speed: .7 } }, .2 + i * .09);
+    });
   }
 
   /* ─── frame ─── */
@@ -1257,11 +1325,28 @@ function buildHorizon(){
   const SMIN = -7, SMAX = 42;
   const track = $('#track'), thumb = $('#thumb'), fill = $('#trackFill');
   $('#ticks').innerHTML = [-7, 0, 7, 14, 21, 28, 35, 42].map(d => `<div class="track-tick ${d === 0 ? 'now' : ''}" style="left:${(d - SMIN) / (SMAX - SMIN) * 100}%"><span>${d === 0 ? 'NOW' : (d > 0 ? '+' : '') + d / 7 + 'W'}</span></div>`).join('');
-  let simMoveT;
+  let simMoveT, thumbDrag = null;
+  const placeThumb = pct => { if (G) G.set(thumb, { x: pct / 100 * track.clientWidth }); else thumb.style.left = pct + '%'; };
+  const xToDays = x => SMIN + clamp(x / track.clientWidth, 0, 1) * (SMAX - SMIN);
+  const daysToX = d => (d - SMIN) / (SMAX - SMIN) * track.clientWidth;
+  function scrambleReadout(){ if (moving() && P('ScrambleTextPlugin')) G.to('#simD', { duration: .5, scrambleText: { text: $('#simD').textContent, chars: '0123456789+-', speed: 1 } }); }
+  if (P('Draggable')){
+    G.set(thumb, { left: 0 });
+    thumbDrag = Draggable.create(thumb, {
+      type: 'x', bounds: { minX: 0, maxX: track.clientWidth }, inertia: !!P('InertiaPlugin') && !reduced, edgeResistance: .9,
+      snap: x => { let d = xToDays(x); d = Math.abs(d) < 1.4 ? 0 : Math.round(d); return daysToX(d); },
+      onPress(){ stopPlay(); track.classList.add('drag'); },
+      onDrag(){ setSim(xToDays(this.x)); },
+      onThrowUpdate(){ setSim(xToDays(this.x)); },
+      onRelease(){ track.classList.remove('drag'); if (!this.tween) { setSim(Math.round(xToDays(this.x))); scrambleReadout(); } },
+      onThrowComplete(){ setSim(Math.round(xToDays(this.x))); scrambleReadout(); }
+    })[0];
+    addEventListener('resize', () => { thumbDrag.applyBounds({ minX: 0, maxX: track.clientWidth }); placeThumb((state.sim - SMIN) / (SMAX - SMIN) * 100); });
+  }
   function setSim(v){
     state.sim = clamp(v, SMIN, SMAX);
     const pct = (state.sim - SMIN) / (SMAX - SMIN) * 100, zero = (0 - SMIN) / (SMAX - SMIN) * 100;
-    thumb.style.left = pct + '%'; fill.style.left = Math.min(pct, zero) + '%'; fill.style.width = Math.abs(pct - zero) + '%';
+    if (!thumbDrag?.isPressed && !thumbDrag?.isThrowing) placeThumb(pct); fill.style.left = Math.min(pct, zero) + '%'; fill.style.width = Math.abs(pct - zero) + '%';
     const d = Math.round(state.sim), dt = new Date(NOW + state.sim * DAY);
     const passing = OPEN.filter(i => matches(i) && i.stage !== 'Submitted' && i.due > NOW && i.due <= dt).length;
     $('#readout').classList.toggle('sim', d !== 0);
@@ -1273,7 +1358,7 @@ function buildHorizon(){
     if (sel && !card.hidden) fillCard(sel, false);
   }
   const valAt = x => { const r = track.getBoundingClientRect(); return SMIN + clamp((x - r.left) / r.width, 0, 1) * (SMAX - SMIN); };
-  track.addEventListener('pointerdown', e => { stopPlay(); track.setPointerCapture(e.pointerId); track.classList.add('drag'); setSim(valAt(e.clientX)); });
+  track.addEventListener('pointerdown', e => { if (thumbDrag && thumb.contains(e.target)) return; stopPlay(); track.setPointerCapture(e.pointerId); track.classList.add('drag'); setSim(valAt(e.clientX)); });
   track.addEventListener('pointermove', e => { if (track.classList.contains('drag')) setSim(valAt(e.clientX)); });
   const endDrag = () => { if (!track.classList.contains('drag')) return; track.classList.remove('drag'); if (Math.abs(state.sim) < .6) snapToday(); };
   track.addEventListener('pointerup', endDrag); track.addEventListener('pointercancel', endDrag);
@@ -1287,14 +1372,14 @@ function buildHorizon(){
   const PLAY = '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"/></svg>';
   const PAUSE = '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5h3v11H4zM9 2.5h3v11H9z"/></svg>';
   function stopPlay(){ if (playing){ playing.kill(); playing = null; } $('#playBtn').innerHTML = PLAY; $('#playBtn').setAttribute('aria-label', 'Play the next six weeks'); }
-  function snapToday(){ stopPlay(); const o = { v: state.sim }; tw(o, { v: 0, duration: .9, ease: 'expo.inOut', onUpdate: () => setSim(o.v) }); }
+  function snapToday(){ stopPlay(); const o = { v: state.sim }; tw(o, { v: 0, duration: 1, ease: EASE_IN, onUpdate: () => setSim(o.v), onComplete: scrambleReadout }); }
   $('#playBtn').addEventListener('click', () => {
     if (playing) return stopPlay();
     if (!moving()){ setSim(state.sim >= SMAX - .5 ? 0 : SMAX); return; }
     if (state.sim >= SMAX - .5) setSim(0);
     if (sel) deselect();
     const o = { v: state.sim };
-    playing = G.to(o, { v: SMAX, duration: (SMAX - state.sim) / 3, ease: 'none', onUpdate: () => setSim(o.v), onComplete: () => { stopPlay(); toast('Six weeks from now. Tap NOW on the track to come back.'); } });
+    playing = G.to(o, { v: SMAX, duration: (SMAX - state.sim) / 3, ease: 'none', onUpdate: () => setSim(o.v), onComplete: () => { stopPlay(); scrambleReadout(); toast('Six weeks from now. Tap NOW on the track to come back.'); } });
     $('#playBtn').innerHTML = PAUSE; $('#playBtn').setAttribute('aria-label', 'Pause');
   });
   setSim(0);
